@@ -6,6 +6,8 @@ __pycache__/
 *.pyc
 *.pyo
 venv/
+.venv/
+.claude/
 
 # Database
 data/trading.db
