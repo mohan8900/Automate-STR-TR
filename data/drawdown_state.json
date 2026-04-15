@@ -1,0 +1,7 @@
+{
+  "high_water_mark": 25000,
+  "current_value": 22000,
+  "drawdown_pct": 0.12,
+  "multiplier": 0.25,
+  "tier_label": "severe"
+}

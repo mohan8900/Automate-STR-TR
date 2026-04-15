@@ -1,0 +1,85 @@
+# ============================================================
+# AI Stock Trader — Master Configuration
+# Edit values here; secrets go in .env
+# ============================================================
+
+[user]
+investment_amount     = 25000.0   # Total capital allocated (INR) — realistic minimum for algo trading
+trading_budget        = 10000.0   # Capital deployable per trading cycle (INR)
+risk_tolerance        = "moderate" # conservative | moderate | aggressive
+max_position_pct      = 0.10      # Max 10% of portfolio per single position
+max_daily_loss_pct    = 0.02      # Circuit breaker: halt at -2% daily loss
+max_portfolio_heat    = 0.06      # Max 6% total portfolio at risk simultaneously
+approval_required     = true      # Require human approval before executing trades
+paper_trading         = true      # ALWAYS start with paper trading!
+
+[market]
+exchange              = "IN"      # US | IN
+# US: NYSE + NASDAQ via Alpaca + yfinance
+# IN: NSE + BSE via Angel One (free) / Zerodha + yfinance
+
+[anthropic]
+model                 = "claude-sonnet-4-6"
+max_tokens            = 4096
+temperature           = 0.1       # Low temperature for consistent financial reasoning
+max_daily_cost_usd    = 10.0      # Safety limit on Claude API spend per day
+
+[trading]
+scan_interval_minutes     = 30
+watchlist_size            = 30    # Top N candidates to analyze per cycle
+max_open_positions        = 10
+max_daily_trades          = 8
+min_composite_score       = 55    # Pre-filter before LLM (0-100)
+min_conviction_execute    = 7     # Minimum conviction to show in approval queue
+min_conviction_auto       = 9     # Minimum conviction for auto-execution (no approval)
+atr_stop_multiplier       = 2.0   # Stop = entry - (ATR * multiplier)
+take_profit_atr_multiples = [2.0, 4.0, 6.0]  # 3 scaled take-profit targets
+min_volume_usd            = 1_000_000   # Min daily volume in INR (lower for India)
+min_price                 = 10.0        # Min stock price (INR) — avoid penny stocks
+max_price                 = 50000.0     # Max stock price (INR)
+earnings_blackout_days    = 3           # No new trades N days before earnings
+
+[risk]
+sizing_method          = "atr"    # fixed | atr | kelly
+risk_per_trade_pct     = 0.01    # Risk 1% of portfolio per trade
+kelly_fraction         = 0.25    # Use quarter-Kelly for safety (conservative)
+
+[vix]
+# India VIX (^INDIAVIX) thresholds differ from US VIX
+low_threshold          = 15.0     # India VIX typically lower than US
+elevated_threshold     = 20.0
+high_threshold         = 30.0
+low_size_multiplier    = 1.0
+elevated_size_multiplier = 0.7
+high_size_multiplier   = 0.4
+extreme_halt           = true     # Halt all trading above high_threshold
+
+[ml]
+enabled                    = true
+target_days                = 5      # Predict 5-day forward return (swing trading)
+retrain_interval_days      = 30     # Retrain models every 30 days
+min_confidence             = 0.55   # Minimum ML confidence to consider signal
+train_window_days          = 504    # ~2 years of training data
+
+[strategy]
+primary                    = "auto"   # auto | swing | momentum | mean_reversion
+enable_ml_boost            = true     # Add ML prediction to strategy signals
+min_consensus_strength     = 0.55     # Minimum strength from strategy consensus
+buffett_screen_enabled     = true     # Run Warren Buffett value screen on candidates
+min_buffett_score          = 50.0     # Minimum Buffett score to consider stock
+
+[database]
+path                   = "data/trading.db"
+backup_daily           = true
+
+[notifications]
+email_enabled          = false
+sms_enabled            = false
+slack_enabled          = false
+alert_on_trade         = true
+alert_on_circuit_break = true
+daily_summary_time     = "15:45"  # IST for India (near market close)
+
+[dashboard]
+port                   = 8501
+auto_refresh_seconds   = 30

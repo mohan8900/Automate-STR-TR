@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l \"C:\\\\Users\\\\mohan.raj086\\\\new repos\\\\firms\\\\ai-stock-trader\"/analysis/*.py \"C:\\\\Users\\\\mohan.raj086\\\\new repos\\\\firms\\\\ai-stock-trader\"/core/*.py \"C:\\\\Users\\\\mohan.raj086\\\\new repos\\\\firms\\\\ai-stock-trader\"/database/*.py)",
+      "Bash(xargs wc *)",
+      "Bash(wc -l \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/prediction/\"*.py \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/backtesting/\"*.py \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/portfolio/\"*.py \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/strategy/\"*.py)",
+      "Bash(py --list)",
+      "Bash(py -3.11 -m venv venv)"
+    ]
+  }
+}
