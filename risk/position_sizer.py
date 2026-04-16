@@ -10,6 +10,7 @@ from typing import Optional
 
 from analysis.aggregator import AnalysisBundle
 from analysis.technical.market_regime import MarketRegime
+from analysis.technical.symbol_regime import SymbolRegime
 from config.settings import TradingSystemConfig
 from llm.response_parser import TradeRecommendation, RiskReview
 from core.logger import get_logger
@@ -64,6 +65,20 @@ class PositionSizer:
         if price <= 0:
             return self._invalid(bundle.symbol, "Price is zero or negative")
 
+        # Symbol-regime hard gate: reject trades the stock's own behavior rules out,
+        # even if the market regime and LLM thesis say otherwise.
+        sr = bundle.symbol_regime
+        if sr.regime == SymbolRegime.CHOPPY_VOLATILE:
+            return self._invalid(
+                bundle.symbol,
+                f"Symbol regime CHOPPY_VOLATILE (vol pctile {sr.vol_percentile:.0f}, ADX {sr.adx:.0f}) — chop eats edge"
+            )
+        if recommendation.action == "BUY" and sr.regime == SymbolRegime.DOWNTREND:
+            return self._invalid(
+                bundle.symbol,
+                f"BUY blocked: symbol in DOWNTREND (ADX {sr.adx:.0f}, -DI {sr.minus_di:.0f} > +DI {sr.plus_di:.0f})"
+            )
+
         # Use modified stop from risk reviewer if provided
         stop_pct = review.modified_stop_loss_pct or recommendation.stop_loss_pct
         # Use modified size from risk reviewer if provided
@@ -93,7 +108,11 @@ class PositionSizer:
         conviction_mult = min(1.0, recommendation.conviction / 10.0)
 
         final_value = base_value * vix_mult * regime_mult * conviction_mult
-        final_value = max(500, final_value)  # Minimum $500 trade
+        # Minimum trade floor: 500 currency units, but never more than 10% of portfolio.
+        # Keeps small paper-trading sandboxes (e.g. ₹1000) usable without forcing
+        # oversized bets, while preserving the ₹500 minimum for normal-sized portfolios.
+        min_floor = min(500, portfolio_value * 0.10)
+        final_value = max(min_floor, final_value)
 
         # ── Constraints ───────────────────────────────────────────────────
         # Portfolio heat check

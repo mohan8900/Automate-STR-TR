@@ -11,7 +11,7 @@ import pandas as pd
 
 from core.logger import get_logger
 from data.price_feed import PriceFeed
-from services.day_trading.config import DayTradingConfig
+from config.settings import DayTradingConfig
 from services.day_trading.data.candle_aggregator import CandleAggregator
 from services.day_trading.data.tick_feed import TickData, TickFeed
 

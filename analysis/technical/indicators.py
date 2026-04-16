@@ -321,6 +321,31 @@ class TechnicalAnalyzer:
 
         return round(max(0, min(100, score)), 1)
 
+    @staticmethod
+    def adx(
+        high: pd.Series, low: pd.Series, close: pd.Series, n: int = 14
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
+        """Wilder's ADX with +DI/-DI. Returns (adx, plus_di, minus_di) as Series."""
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs(),
+        ], axis=1).max(axis=1)
+        atr_n = tr.ewm(alpha=1 / n, adjust=False).mean()
+
+        up = high.diff()
+        down = -low.diff()
+        plus_dm = ((up > down) & (up > 0)).astype(float) * up
+        minus_dm = ((down > up) & (down > 0)).astype(float) * down
+
+        plus_di = 100 * plus_dm.ewm(alpha=1 / n, adjust=False).mean() / atr_n.replace(0, np.nan)
+        minus_di = 100 * minus_dm.ewm(alpha=1 / n, adjust=False).mean() / atr_n.replace(0, np.nan)
+
+        di_sum = (plus_di + minus_di).replace(0, np.nan)
+        dx = 100 * (plus_di - minus_di).abs() / di_sum
+        adx_series = dx.ewm(alpha=1 / n, adjust=False).mean()
+        return adx_series, plus_di, minus_di
+
     def _empty_signals(self, symbol: str, df: pd.DataFrame) -> TechnicalSignals:
         price = float(df["close"].iloc[-1]) if not df.empty else 0
         return TechnicalSignals(

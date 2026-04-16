@@ -4,8 +4,8 @@
 # ============================================================
 
 [user]
-investment_amount     = 25000.0   # Total capital allocated (INR) — realistic minimum for algo trading
-trading_budget        = 10000.0   # Capital deployable per trading cycle (INR)
+investment_amount     = 1000.0    # Total capital allocated (INR) — paper-trading sandbox size
+trading_budget        = 1000.0    # Capital deployable per trading cycle (INR)
 risk_tolerance        = "moderate" # conservative | moderate | aggressive
 max_position_pct      = 0.10      # Max 10% of portfolio per single position
 max_daily_loss_pct    = 0.02      # Circuit breaker: halt at -2% daily loss
@@ -84,8 +84,8 @@ alert_on_circuit_break = true
 daily_summary_time     = "15:45"  # IST for India (near market close)
 
 [day_trading]
-enabled                          = false
-capital_allocation               = 10000.0
+enabled                          = true
+capital_allocation               = 10000.0   # Intraday paper pool — ₹10k minimum so ₹20 brokerage doesn't dominate P&L
 max_trades_per_day               = 10
 max_intraday_loss_pct            = 0.015
 max_position_pct                 = 0.20

@@ -24,7 +24,12 @@
       "Bash(cp -r prediction services/swing_trading/prediction)",
       "Bash(cp -r backtesting services/swing_trading/backtesting)",
       "Bash(cp -r portfolio services/swing_trading/portfolio)",
-      "Bash(cp scheduler/trading_loop.py services/swing_trading/trading_loop.py)"
+      "Bash(cp scheduler/trading_loop.py services/swing_trading/trading_loop.py)",
+      "WebFetch(domain:chatgpt.com)",
+      "WebFetch(domain:youtu.be)",
+      "Bash(rm services/day_trading/config.py)",
+      "Bash(rmdir tests *)",
+      "Bash(python -X utf8 -c ' *)"
     ]
   }
 }

@@ -11,6 +11,7 @@ from typing import Optional
 from analysis.technical.indicators import TechnicalAnalyzer, TechnicalSignals
 from analysis.technical.support_resistance import SupportResistanceAnalyzer
 from analysis.technical.market_regime import MarketRegimeClassifier, MarketRegime, RegimeReading
+from analysis.technical.symbol_regime import SymbolRegimeClassifier, SymbolRegimeReading
 from analysis.fundamental.scorer import FundamentalScorer
 from analysis.sentiment.news_sentiment import SentimentAnalyzer, SentimentResult
 from data.price_feed import PriceFeed
@@ -49,6 +50,7 @@ class AnalysisBundle:
 
     # Market context
     market_regime: RegimeReading
+    symbol_regime: SymbolRegimeReading
     vix: VixReading
 
     # Analysis layers
@@ -101,6 +103,11 @@ Current Position: {position_text}
 
 --- MARKET CONTEXT ---
 Market Regime: {self.market_regime.regime.value} — {self.market_regime.description}
+  Benchmark ADX(14): {self.market_regime.trend_strength:.1f} | Trend persistence: {self.market_regime.trend_persistence:.0f}% of last 50d above SMA50
+  Vol: {self.market_regime.realized_vol_annualized:.1%} annualized (pctile {self.market_regime.vol_percentile:.0f} vs 1y) | Breadth: {self.market_regime.breadth_score:.0f}/100
+Symbol Regime: {self.symbol_regime.regime.value} — {self.symbol_regime.description}
+  ADX {self.symbol_regime.adx:.0f} (+DI {self.symbol_regime.plus_di:.0f} / -DI {self.symbol_regime.minus_di:.0f}) | Vol pctile {self.symbol_regime.vol_percentile:.0f} | BB width pctile {self.symbol_regime.bb_width_percentile:.0f}
+  Flags: momentum_ok={self.symbol_regime.momentum_ok} | mean_reversion_ok={self.symbol_regime.mean_reversion_ok} | reduce_size={self.symbol_regime.reduce_size}
 VIX Level: {self.vix.level:.1f} ({self.vix.regime.value}) — {self.vix.description}
 Earnings: {earnings_text}
 
@@ -149,6 +156,7 @@ class AnalysisAggregator:
         self.tech_analyzer = TechnicalAnalyzer()
         self.sr_analyzer = SupportResistanceAnalyzer()
         self.regime_classifier = MarketRegimeClassifier(exchange=exchange)
+        self.symbol_regime_classifier = SymbolRegimeClassifier()
         self.fundamental_scorer = FundamentalScorer()
         self.sentiment_analyzer = SentimentAnalyzer()
         self.news_fetcher = NewsFetcher(exchange=exchange)
@@ -191,6 +199,7 @@ class AnalysisAggregator:
         tech.nearest_support = sr.nearest_support
         tech.nearest_resistance = sr.nearest_resistance
         tech.risk_reward_to_resistance = sr.risk_reward_to_resistance
+        symbol_regime = self.symbol_regime_classifier.classify(symbol, df)
 
         # Fundamental analysis
         fundamental = self.fundamental_scorer.fetch_and_score(symbol)
@@ -218,6 +227,7 @@ class AnalysisAggregator:
             timestamp=datetime.now(),
             current_price=current_price,
             market_regime=regime,
+            symbol_regime=symbol_regime,
             vix=vix,
             technical=tech,
             fundamental=fundamental,

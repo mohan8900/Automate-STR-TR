@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, date
 
 from core.logger import get_logger
-from services.day_trading.config import DayTradingConfig
+from config.settings import DayTradingConfig
 
 log = get_logger("intraday_risk")
 
