@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS analysis_logs (
     vix_level           REAL,
     llm_thesis          TEXT,
     llm_risks           TEXT,           -- JSON array
+    llm_full_response   TEXT,           -- Full LLM recommendation JSON
+    model_signals       TEXT,           -- Intelligence report summary JSON
     execution_approved  INTEGER DEFAULT 0,
     trade_id            INTEGER REFERENCES trades(id)
 );
@@ -118,10 +120,59 @@ CREATE TABLE IF NOT EXISTS approval_queue (
     decision_note       TEXT
 );
 
+CREATE TABLE IF NOT EXISTS intraday_trades (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol              TEXT NOT NULL,
+    action              TEXT NOT NULL,
+    qty                 INTEGER NOT NULL,
+    entry_price         REAL NOT NULL,
+    exit_price          REAL,
+    stop_loss_price     REAL NOT NULL,
+    target_price        REAL,
+    strategy_name       TEXT,
+    order_id            TEXT,
+    status              TEXT DEFAULT 'OPEN',
+    close_reason        TEXT,
+    opened_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closed_at           TIMESTAMP,
+    minutes_held        INTEGER,
+    realized_pnl        REAL,
+    realized_pnl_pct    REAL,
+    brokerage_cost      REAL,
+    net_pnl             REAL,
+    vwap_at_entry       REAL,
+    paper_trading       INTEGER DEFAULT 1,
+    xgboost_prob        REAL,
+    signal_strength     REAL,
+    trading_date        DATE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS intraday_signals (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol              TEXT NOT NULL,
+    timestamp           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    strategy_name       TEXT,
+    action              TEXT,
+    strength            REAL,
+    entry_price         REAL,
+    stop_loss_price     REAL,
+    target_price        REAL,
+    vwap                REAL,
+    rsi                 REAL,
+    volume_ratio        REAL,
+    xgboost_direction   TEXT,
+    xgboost_probability REAL,
+    executed            INTEGER DEFAULT 0,
+    trading_date        DATE NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
 CREATE INDEX IF NOT EXISTS idx_analysis_symbol ON analysis_logs(symbol);
 CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_queue(status);
+CREATE INDEX IF NOT EXISTS idx_intraday_trades_date ON intraday_trades(trading_date);
+CREATE INDEX IF NOT EXISTS idx_intraday_trades_status ON intraday_trades(status);
+CREATE INDEX IF NOT EXISTS idx_intraday_signals_date ON intraday_signals(trading_date);
 """
 
 
@@ -135,6 +186,15 @@ class DatabaseManager:
     def _init_schema(self) -> None:
         with self.get_connection() as conn:
             conn.executescript(SCHEMA_SQL)
+            # Migrate: add columns if they don't exist (safe for existing DBs)
+            for col, typ in [
+                ("llm_full_response", "TEXT"),
+                ("model_signals", "TEXT"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE analysis_logs ADD COLUMN {col} {typ}")
+                except Exception:
+                    pass  # Column already exists
             conn.commit()
         log.info(f"Database initialized at {self.db_path}")
 

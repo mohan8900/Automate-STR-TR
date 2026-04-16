@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Stock Trader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 800: '#1a1a2e', 900: '#0f0f1a', 700: '#252545' },
+                        accent: { green: '#00c853', red: '#ff1744', yellow: '#ffc107', blue: '#2979ff' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: #0f0f1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; }
+        .card { background: #1a1a2e; border: 1px solid #252545; border-radius: 12px; padding: 20px; }
+        .card-hover:hover { border-color: #2979ff; transition: border-color 0.2s; }
+        .stat-value { font-size: 1.8rem; font-weight: 700; }
+        .stat-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+        .nav-link { padding: 10px 20px; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: #252545; color: #2979ff; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .green { color: #00c853; } .red { color: #ff1744; } .yellow { color: #ffc107; } .blue { color: #2979ff; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; color: #888; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #252545; }
+        td { padding: 10px 12px; border-bottom: 1px solid #1a1a2e; font-size: 0.9rem; }
+        tr:hover { background: #252545; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0f0f1a; } ::-webkit-scrollbar-thumb { background: #252545; border-radius: 3px; }
+    </style>
+</head>
+<body class="dark">
+
+<!-- Navigation -->
+<nav class="fixed top-0 left-0 right-0 z-50 bg-dark-900 border-b border-dark-700 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <span class="text-xl font-bold blue">AI Stock Trader</span>
+        <span class="badge {% if paper_trading %}bg-green-900 text-green-400{% else %}bg-red-900 text-red-400{% endif %}">
+            {% if paper_trading %}PAPER{% else %}LIVE{% endif %}
+        </span>
+        <span class="badge bg-blue-900 text-blue-400">{{ exchange }}</span>
+    </div>
+    <div class="flex gap-2">
+        <a href="/" class="nav-link active">Dashboard</a>
+        <a href="/watchlist" class="nav-link">Watchlist</a>
+        <a href="/trades" class="nav-link">Trades</a>
+        <a href="/health" class="nav-link">System Health</a>
+    </div>
+    <div class="flex items-center gap-3">
+        <span id="market-status" class="text-sm"></span>
+        <span id="clock" class="text-sm text-gray-500"></span>
+    </div>
+</nav>
+
+<main class="pt-20 px-6 pb-10 max-w-7xl mx-auto">
+
+    <!-- Portfolio Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+        <div class="card">
+            <div class="stat-label">Portfolio Value</div>
+            <div class="stat-value" id="portfolio-value">—</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Today's P&L</div>
+            <div class="stat-value" id="daily-pnl">—</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Open Positions</div>
+            <div class="stat-value blue" id="open-positions">—</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Portfolio Heat</div>
+            <div class="stat-value" id="portfolio-heat">—</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Market Regime</div>
+            <div class="stat-value" id="market-regime">—</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">VIX Level</div>
+            <div class="stat-value" id="vix-level">—</div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="card card-hover">
+            <div class="stat-label">Total Return (30d)</div>
+            <div class="text-2xl font-bold" id="total-return">—</div>
+        </div>
+        <div class="card card-hover">
+            <div class="stat-label">Sharpe Ratio</div>
+            <div class="text-2xl font-bold" id="sharpe">—</div>
+        </div>
+        <div class="card card-hover">
+            <div class="stat-label">Win Rate</div>
+            <div class="text-2xl font-bold" id="win-rate">—</div>
+        </div>
+        <div class="card card-hover">
+            <div class="stat-label">Max Drawdown</div>
+            <div class="text-2xl font-bold red" id="max-dd">—</div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="card">
+            <h3 class="text-sm font-semibold text-gray-400 mb-3 uppercase">Equity Curve</h3>
+            <canvas id="equity-chart" height="200"></canvas>
+        </div>
+        <div class="card">
+            <h3 class="text-sm font-semibold text-gray-400 mb-3 uppercase">Daily P&L</h3>
+            <canvas id="pnl-chart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Pending Approvals -->
+    <div class="card mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase">Pending Approvals</h3>
+            <span id="pending-count" class="badge bg-yellow-900 text-yellow-400"></span>
+        </div>
+        <div id="pending-list">
+            <p class="text-gray-500 text-sm">No pending trades</p>
+        </div>
+    </div>
+
+    <!-- Open Positions Table -->
+    <div class="card">
+        <h3 class="text-sm font-semibold text-gray-400 mb-4 uppercase">Open Positions</h3>
+        <div class="overflow-x-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Action</th>
+                        <th>Shares</th>
+                        <th>Entry Price</th>
+                        <th>Stop Loss</th>
+                        <th>Conviction</th>
+                        <th>Thesis</th>
+                        <th>Opened</th>
+                    </tr>
+                </thead>
+                <tbody id="positions-table">
+                    <tr><td colspan="8" class="text-gray-500 text-center">No open positions</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<script>
+const CURRENCY = "{{ currency }}";
+let equityChart = null;
+let pnlChart = null;
+
+// Clock
+setInterval(() => {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST';
+}, 1000);
+
+// Fetch and update portfolio
+async function loadPortfolio() {
+    try {
+        const res = await fetch('/api/portfolio');
+        const d = await res.json();
+        document.getElementById('portfolio-value').textContent = CURRENCY + Number(d.total_value).toLocaleString('en-IN', {maximumFractionDigits: 0});
+        const pnlEl = document.getElementById('daily-pnl');
+        const pnlPct = (d.daily_pnl_pct * 100).toFixed(2);
+        pnlEl.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct + '%';
+        pnlEl.className = 'stat-value ' + (pnlPct >= 0 ? 'green' : 'red');
+        document.getElementById('open-positions').textContent = d.open_positions;
+        document.getElementById('portfolio-heat').textContent = (d.portfolio_heat * 100).toFixed(1) + '%';
+        const regimeEmoji = {'BULL':'🐂','BEAR':'🐻','SIDEWAYS':'↔️','VOLATILE':'⚡'};
+        document.getElementById('market-regime').textContent = (regimeEmoji[d.market_regime] || '') + ' ' + (d.market_regime || '—');
+        document.getElementById('vix-level').textContent = d.vix_level ? d.vix_level.toFixed(1) : '—';
+    } catch(e) { console.error('Portfolio load failed:', e); }
+}
+
+async function loadPerformance() {
+    try {
+        const res = await fetch('/api/performance');
+        const d = await res.json();
+        const retEl = document.getElementById('total-return');
+        retEl.textContent = (d.total_return * 100).toFixed(1) + '%';
+        retEl.className = 'text-2xl font-bold ' + (d.total_return >= 0 ? 'green' : 'red');
+        document.getElementById('sharpe').textContent = d.sharpe.toFixed(2);
+        document.getElementById('win-rate').textContent = (d.win_rate * 100).toFixed(0) + '%';
+        document.getElementById('max-dd').textContent = (d.max_drawdown * 100).toFixed(1) + '%';
+    } catch(e) {}
+}
+
+async function loadHistory() {
+    try {
+        const res = await fetch('/api/history');
+        const data = await res.json();
+        if (!data.length) return;
+
+        const labels = data.map(d => d.date);
+        const values = data.map(d => d.value);
+        const pnls = data.map(d => d.pnl);
+
+        if (equityChart) equityChart.destroy();
+        equityChart = new Chart(document.getElementById('equity-chart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    borderColor: '#2979ff',
+                    backgroundColor: 'rgba(41,121,255,0.1)',
+                    fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: true, grid: { color: '#252545' }, ticks: { color: '#666', maxTicksLimit: 8 } },
+                    y: { grid: { color: '#252545' }, ticks: { color: '#666' } }
+                }
+            }
+        });
+
+        if (pnlChart) pnlChart.destroy();
+        pnlChart = new Chart(document.getElementById('pnl-chart'), {
+            type: 'bar',
+            data: {
+                labels: labels.slice(-30),
+                datasets: [{
+                    data: pnls.slice(-30),
+                    backgroundColor: pnls.slice(-30).map(v => v >= 0 ? '#00c853' : '#ff1744'),
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: true, grid: { color: '#252545' }, ticks: { color: '#666', maxTicksLimit: 8 } },
+                    y: { grid: { color: '#252545' }, ticks: { color: '#666' } }
+                }
+            }
+        });
+    } catch(e) {}
+}
+
+async function loadPositions() {
+    try {
+        const res = await fetch('/api/positions');
+        const positions = await res.json();
+        const tbody = document.getElementById('positions-table');
+        if (!positions.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-gray-500 text-center">No open positions — start the trading loop</td></tr>';
+            return;
+        }
+        tbody.innerHTML = positions.map(p => `
+            <tr>
+                <td class="font-semibold">${p.symbol}</td>
+                <td><span class="badge ${p.action==='BUY'?'bg-green-900 text-green-400':'bg-red-900 text-red-400'}">${p.action}</span></td>
+                <td>${p.shares}</td>
+                <td>${CURRENCY}${Number(p.entry_price).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                <td class="red">${CURRENCY}${Number(p.stop_loss).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                <td>${p.conviction}/10</td>
+                <td class="text-gray-400 text-xs max-w-xs truncate">${p.thesis || '—'}</td>
+                <td class="text-gray-500 text-xs">${p.opened_at}</td>
+            </tr>
+        `).join('');
+    } catch(e) {}
+}
+
+async function loadPending() {
+    try {
+        const res = await fetch('/api/pending');
+        const pending = await res.json();
+        const countEl = document.getElementById('pending-count');
+        const listEl = document.getElementById('pending-list');
+        if (!pending.length) {
+            countEl.textContent = '0 pending';
+            listEl.innerHTML = '<p class="text-gray-500 text-sm">No trades awaiting approval</p>';
+            return;
+        }
+        countEl.textContent = pending.length + ' pending';
+        countEl.className = 'badge bg-yellow-900 text-yellow-400 pulse';
+        listEl.innerHTML = pending.map(p => `
+            <div class="flex items-center justify-between py-3 border-b border-dark-700">
+                <div class="flex items-center gap-4">
+                    <span class="badge ${p.action==='BUY'?'bg-green-900 text-green-400':'bg-red-900 text-red-400'}">${p.action}</span>
+                    <span class="font-semibold">${p.symbol}</span>
+                    <span class="text-gray-400">Conv: ${p.conviction}/10</span>
+                    <span class="text-gray-400">${CURRENCY}${Number(p.position_value).toLocaleString('en-IN', {maximumFractionDigits: 0})}</span>
+                    <span class="text-gray-500 text-xs">${p.thesis || ''}</span>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="approveTrade(${p.id})" class="px-4 py-1 bg-green-800 text-green-300 rounded-lg text-sm hover:bg-green-700">Approve</button>
+                    <button onclick="rejectTrade(${p.id})" class="px-4 py-1 bg-red-900 text-red-400 rounded-lg text-sm hover:bg-red-800">Reject</button>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+
+async function approveTrade(id) {
+    await fetch('/api/approve/' + id, { method: 'POST' });
+    loadPending();
+}
+
+async function rejectTrade(id) {
+    await fetch('/api/reject/' + id, { method: 'POST' });
+    loadPending();
+}
+
+async function loadMarketStatus() {
+    try {
+        const res = await fetch('/api/market-status');
+        const d = await res.json();
+        const el = document.getElementById('market-status');
+        if (d.is_open) {
+            el.innerHTML = '<span class="inline-block w-2 h-2 bg-green-400 rounded-full mr-1"></span>Market Open';
+            el.className = 'text-sm green';
+        } else {
+            el.innerHTML = '<span class="inline-block w-2 h-2 bg-red-400 rounded-full mr-1"></span>Closed (' + d.next_open + ')';
+            el.className = 'text-sm red';
+        }
+    } catch(e) {}
+}
+
+// Initial load
+loadPortfolio(); loadPerformance(); loadHistory(); loadPositions(); loadPending(); loadMarketStatus();
+
+// Auto-refresh every 30s
+setInterval(() => { loadPortfolio(); loadPerformance(); loadPositions(); loadPending(); loadMarketStatus(); }, 30000);
+</script>
+</body>
+</html>

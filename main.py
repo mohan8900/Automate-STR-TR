@@ -5,6 +5,7 @@ Usage:
   python main.py              # Start the full trading loop
   python main.py --dashboard  # Launch the Streamlit dashboard only
   python main.py --backtest   # Run a single analysis cycle (no trading)
+  python main.py --day-trade  # Start intraday day trading loop
   python main.py --check      # Verify all APIs and configuration
 """
 from __future__ import annotations
@@ -13,6 +14,11 @@ import argparse
 import os
 import sys
 from pathlib import Path
+
+# Fix Windows console encoding for ₹ and other Unicode
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Ensure project root is in path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -27,6 +33,7 @@ def parse_args():
     parser.add_argument("--buffett-screen", action="store_true", help="Run Warren Buffett value screen on watchlist")
     parser.add_argument("--check", action="store_true", help="Check API keys and configuration")
     parser.add_argument("--once", action="store_true", help="Run one trading cycle and exit")
+    parser.add_argument("--day-trade", action="store_true", help="Start intraday day trading loop")
     return parser.parse_args()
 
 
@@ -43,20 +50,24 @@ def check_config():
     print("="*60)
 
     # Check API keys
+    # At least one LLM key is required
+    has_llm = bool(
+        os.getenv("GEMINI_API_KEY") or
+        os.getenv("LITELLM_API_BASE") or
+        os.getenv("ANTHROPIC__API_KEY", "").startswith("sk-ant-api")
+    )
     checks = {
-        "ANTHROPIC_API_KEY": ("Claude AI", True),     # Required
-        "ALPACA_API_KEY": ("Alpaca Broker", cfg.market.exchange == "US"),
+        "GEMINI_API_KEY": ("Google Gemini (FREE LLM)", not has_llm),
         "ANGEL_ONE__API_KEY": ("Angel One SmartAPI (India)", cfg.market.exchange == "IN"),
-        "KITE_API_KEY": ("Zerodha Kite (India)", False),
         "NEWS_API_KEY": ("NewsAPI (optional)", False),
     }
 
     all_required_ok = True
     for env_key, (name, required) in checks.items():
         val = os.getenv(env_key, "")
-        status = "✅" if val else ("❌" if required else "⚠️")
+        status = "[OK]" if val else ("[MISSING]" if required else "[SKIP]")
         suffix = " (REQUIRED)" if required and not val else ""
-        print(f"{status} {name}: {'set' if val else 'NOT SET'}{suffix}")
+        print(f"  {status} {name}: {'set' if val else 'NOT SET'}{suffix}")
         if required and not val:
             all_required_ok = False
 
@@ -71,7 +82,7 @@ def check_config():
     print(f"  Scan Interval: {cfg.trading.scan_interval_minutes}m")
 
     if not all_required_ok:
-        print("\n⚠️  Missing required API keys. Copy .env.example to .env and fill in values.")
+        print("\n[WARNING]  Missing required API keys. Copy .env.example to .env and fill in values.")
         return False
 
     # Try connecting to data feed
@@ -80,18 +91,18 @@ def check_config():
         test_symbol = "TCS.NS" if cfg.market.exchange == "IN" else "AAPL"
         ticker = yf.Ticker(test_symbol)
         hist = ticker.history(period="2d")
-        print(f"\n✅ Yahoo Finance: connected ({test_symbol} @ {currency}{hist['Close'].iloc[-1]:.2f})")
+        print(f"\n[OK] Yahoo Finance: connected ({test_symbol} @ {currency}{hist['Close'].iloc[-1]:.2f})")
     except Exception as e:
-        print(f"\n❌ Yahoo Finance: {e}")
+        print(f"\n[FAIL] Yahoo Finance: {e}")
 
     # Try LLM
     try:
         from llm.client import ClaudeClient
         client = ClaudeClient(cfg.anthropic)
         test = client.complete("You are a test.", "Say 'OK' and nothing else.", max_tokens=10)
-        print(f"✅ Claude API: connected (response: {test.strip()[:20]})")
+        print(f"[OK] Claude API: connected (response: {test.strip()[:20]})")
     except Exception as e:
-        print(f"❌ Claude API: {e}")
+        print(f"[FAIL] Claude API: {e}")
 
     print("\n" + "="*60 + "\n")
     return all_required_ok
@@ -100,7 +111,7 @@ def check_config():
 def run_single_cycle(execute: bool = False):
     """Run one complete analysis cycle."""
     from config.settings import get_settings
-    from scheduler.trading_loop import TradingLoop
+    from services.swing_trading.trading_loop import TradingLoop
     from core.logger import get_logger
 
     log = get_logger("main")
@@ -122,7 +133,7 @@ def run_single_cycle(execute: bool = False):
 def run_trading_loop():
     """Start the continuous trading loop."""
     from config.settings import get_settings
-    from scheduler.trading_loop import TradingLoop
+    from services.swing_trading.trading_loop import TradingLoop
     from core.logger import get_logger
 
     log = get_logger("main")
@@ -176,7 +187,7 @@ def run_ml_backtest():
     """Run ML ensemble backtesting on historical data."""
     from config.settings import get_settings
     from config.watchlists import IN_WATCHLIST, US_WATCHLIST
-    from backtesting.runner import BacktestRunner
+    from services.swing_trading.backtesting.runner import BacktestRunner
 
     cfg = get_settings()
     runner = BacktestRunner(cfg)
@@ -191,7 +202,7 @@ def run_technical_backtest():
     """Run technical analysis backtesting."""
     from config.settings import get_settings
     from config.watchlists import IN_WATCHLIST, US_WATCHLIST
-    from backtesting.runner import BacktestRunner
+    from services.swing_trading.backtesting.runner import BacktestRunner
 
     cfg = get_settings()
     runner = BacktestRunner(cfg)
@@ -202,11 +213,59 @@ def run_technical_backtest():
     return result
 
 
+def run_day_trading_loop():
+    """Start the intraday day-trading loop."""
+    from config.settings import get_settings
+    from services.day_trading.loop import IntradayTradingLoop
+    from core.logger import get_logger
+
+    log = get_logger("main")
+    cfg = get_settings()
+
+    if not cfg.day_trading.enabled:
+        print(
+            "\n[ERROR] Day trading is disabled in configuration.\n"
+            "Set [day_trading] enabled = true in config.toml to enable it."
+        )
+        sys.exit(1)
+
+    # Safety confirmation for live mode
+    if not cfg.day_trading.paper_trading:
+        print("\n" + "!" * 60)
+        print("  WARNING: LIVE INTRADAY TRADING MODE ENABLED")
+        print("  Real money will be used for all day trades!")
+        print("!" * 60)
+        confirm = input("\nType 'LIVE' to confirm live day trading, anything else to abort: ")
+        if confirm.strip() != "LIVE":
+            print("Aborted. Set paper_trading = true under [day_trading] in config.toml.")
+            sys.exit(1)
+
+    log.info("Starting Intraday Day Trading System...")
+    log.info(
+        f"Exchange: {cfg.market.exchange} | "
+        f"{'PAPER' if cfg.day_trading.paper_trading else 'LIVE'} | "
+        f"Capital: {'₹' if cfg.market.exchange == 'IN' else '$'}"
+        f"{cfg.day_trading.capital_allocation:,.0f} | "
+        f"Max trades/day: {cfg.day_trading.max_trades_per_day}"
+    )
+
+    loop = IntradayTradingLoop(cfg)
+
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        log.info("Day trading loop stopped by user (Ctrl+C)")
+        loop.stop()
+    except Exception as e:
+        log.exception(f"Fatal day trading loop error: {e}")
+        sys.exit(1)
+
+
 def run_buffett_screen():
     """Run Warren Buffett value screen on the watchlist."""
     from config.settings import get_settings
     from config.watchlists import IN_WATCHLIST, US_WATCHLIST
-    from portfolio.value_screener import ValueScreener
+    from services.swing_trading.portfolio.value_screener import ValueScreener
 
     cfg = get_settings()
     screener = ValueScreener()
@@ -259,6 +318,8 @@ def main():
         run_buffett_screen()
     elif args.backtest:
         run_single_cycle(execute=False)
+    elif args.day_trade:
+        run_day_trading_loop()
     elif args.once:
         run_single_cycle(execute=True)
     else:

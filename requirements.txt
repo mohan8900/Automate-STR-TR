@@ -19,6 +19,11 @@ alpaca-py>=0.26.0     # US markets (optional)
 # Machine Learning
 scikit-learn>=1.4.0
 xgboost>=2.0.0        # Gradient boosted trees (primary ML model)
+joblib>=1.3.0         # Model persistence (better than pickle for ML)
+
+# Deep Learning (LSTM neural network — CPU-only)
+# Install with: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2.0          # LSTM predictor (optional — system works without it)
 
 # Data Processing
 pandas>=2.2.0

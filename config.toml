@@ -60,6 +60,9 @@ target_days                = 5      # Predict 5-day forward return (swing tradin
 retrain_interval_days      = 30     # Retrain models every 30 days
 min_confidence             = 0.55   # Minimum ML confidence to consider signal
 train_window_days          = 504    # ~2 years of training data
+lstm_enabled               = true   # LSTM neural network (requires torch)
+fuzzy_enabled              = true   # Fuzzy logic trading rules
+parallel_timeout_seconds   = 60     # Max seconds per model in parallel execution
 
 [strategy]
 primary                    = "auto"   # auto | swing | momentum | mean_reversion
@@ -79,6 +82,26 @@ slack_enabled          = false
 alert_on_trade         = true
 alert_on_circuit_break = true
 daily_summary_time     = "15:45"  # IST for India (near market close)
+
+[day_trading]
+enabled                          = false
+capital_allocation               = 10000.0
+max_trades_per_day               = 10
+max_intraday_loss_pct            = 0.015
+max_position_pct                 = 0.20
+max_concurrent_positions         = 3
+position_time_limit_minutes      = 180
+force_exit_time                  = "15:15"
+orb_window_minutes               = 15
+scan_interval_seconds            = 60
+websocket_enabled                = true
+websocket_fallback_to_yfinance   = true
+llm_batch_review_interval_minutes = 15
+strategies_enabled               = ["vwap_scalp", "orb", "momentum_scalp"]
+min_signal_strength              = 0.65
+brokerage_per_order              = 20.0
+brokerage_pct                    = 0.0025
+paper_trading                    = true
 
 [dashboard]
 port                   = 8501

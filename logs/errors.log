@@ -1,0 +1,68 @@
+2026-04-16 14:44:55.112 | ERROR    | llm.response_parser:parse_recommendation:101 - Failed to parse trade recommendation for BAJAJ-AUTO.NS: 6 validation errors for TradeRecommendation
+max_position_pct
+  Input should be greater than or equal to 0.005 [type=greater_than_equal, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+stop_loss_pct
+  Input should be greater than or equal to 0.01 [type=greater_than_equal, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+take_profit_targets.0.price
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+take_profit_targets.1.price
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+take_profit_targets.2.price
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+holding_period_days
+  Input should be greater than or equal to 1 [type=greater_than_equal, input_value=0, input_type=int]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+Raw: ```json
+{
+  "action": "PASS",
+  "conviction": 1,
+  "max_position_pct": 0.0,
+  "entry_price_low": 0.0,
+  "entry_price_high": 0.0,
+  "stop_loss_pct": 0.0,
+  "take_profit_targets": [
+    {"price": 0.0, "sell_fraction": 0.33},
+    {"price": 0.0, "sell_fraction": 0.33},
+    {"price": 0.0, "sell_fraction": 0.34}
+  ],
+  "holding_period_days": 0,
+  "technical_summary": "The stock exhibits strong short-term bullish momentum (Golden Cross, price above MAs, positive MACD, rising OBV) but is significantly o
+2026-04-16 14:45:47.990 | ERROR    | llm.response_parser:parse_recommendation:101 - Failed to parse trade recommendation for TATASTEEL.NS: 6 validation errors for TradeRecommendation
+max_position_pct
+  Input should be greater than or equal to 0.005 [type=greater_than_equal, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+stop_loss_pct
+  Input should be greater than or equal to 0.01 [type=greater_than_equal, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+take_profit_targets.0.price
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+take_profit_targets.1.price
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+take_profit_targets.2.price
+  Input should be greater than 0 [type=greater_than, input_value=0.0, input_type=float]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than
+holding_period_days
+  Input should be greater than or equal to 1 [type=greater_than_equal, input_value=0, input_type=int]
+    For further information visit https://errors.pydantic.dev/2.13/v/greater_than_equal
+Raw: ```json
+{
+  "action": "PASS",
+  "conviction": 1,
+  "max_position_pct": 0.0,
+  "entry_price_low": 0.0,
+  "entry_price_high": 0.0,
+  "stop_loss_pct": 0.0,
+  "take_profit_targets": [
+    {"price": 0.0, "sell_fraction": 0.33},
+    {"price": 0.0, "sell_fraction": 0.33},
+    {"price": 0.0, "sell_fraction": 0.34}
+  ],
+  "holding_period_days": 0,
+  "technical_summary": "TATASTEEL.NS is technically overbought with RSI at 90.6 and Stochastic at 91/90, and price near the upper Bollinger Band. It is also at

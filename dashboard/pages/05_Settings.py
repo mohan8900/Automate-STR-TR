@@ -8,8 +8,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import streamlit as st
 
-st.set_page_config(page_title="Settings", page_icon="⚙️", layout="wide")
-st.title("Trading System Settings")
+st.set_page_config(page_title="Settings", page_icon="", layout="wide")
+from dashboard.theme import apply_theme, apply_plotly_theme, COLORS, section_header
+apply_theme()
+section_header("Trading System Settings")
 
 @st.cache_resource
 def get_config():

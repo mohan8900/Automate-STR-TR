@@ -13,7 +13,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from strategy.base import Strategy, TradeSignal
+from services.swing_trading.strategy.base import Strategy, TradeSignal
 from core.logger import get_logger
 
 log = get_logger("momentum_strategy")

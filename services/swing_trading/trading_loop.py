@@ -43,15 +43,16 @@ from llm.client import ClaudeClient
 from llm.response_parser import TradeRecommendation
 from llm.risk_evaluator import LLMRiskEvaluator
 from notifications.alert_manager import AlertManager
-from portfolio.manager import PortfolioManager
-from prediction.market_predictor import MarketPredictor
+from services.swing_trading.portfolio.manager import PortfolioManager
+from services.swing_trading.prediction.market_predictor import MarketPredictor
 from core.kill_switch import KillSwitch, KillSwitchError
 from risk.drawdown_tracker import DrawdownTracker
 from risk.portfolio_heat import PortfolioHeatMonitor
 from risk.position_sizer import PositionSizer, SizedTrade
 from risk.stop_loss_manager import StopLossManager
 from scheduler.market_hours import MarketHours
-from strategy.selector import StrategySelector
+from services.swing_trading.prediction.intelligence_aggregator import IntelligenceAggregator
+from services.swing_trading.strategy.selector import StrategySelector
 
 log = get_logger("trading_loop")
 
@@ -99,6 +100,7 @@ class TradingLoop:
         self.portfolio_manager = PortfolioManager(config)
         self.strategy_selector = StrategySelector()
         self.market_predictor = MarketPredictor(exchange=config.market.exchange)
+        self.intelligence = IntelligenceAggregator(config)
 
         # Kill switch and drawdown tracker
         self.kill_switch = KillSwitch(
@@ -253,52 +255,36 @@ class TradingLoop:
 
         log.info(f"{len(bundles)} bundles passed composite score filter")
 
-        # ── Step 10: Strategy consensus + ML prediction per stock ─────────
-        strategy_filtered: list[tuple[AnalysisBundle, dict]] = []
+        # ── Step 10: Gather intelligence from ALL AI models (parallel) ────
+        from services.swing_trading.prediction.intelligence_aggregator import IntelligenceAggregator as _IA
+        intelligence_reports: list[tuple[AnalysisBundle, object]] = []
         for bundle in bundles:
             try:
-                # Get ML prediction for this stock
-                ml_pred = None
-                if self.config.ml.enabled and self.config.strategy.enable_ml_boost:
-                    try:
-                        df = self.aggregator.price_feed.get_historical(
-                            bundle.symbol, period="2y", interval="1d"
-                        )
-                        ml_pred = self.market_predictor.predict_stock(bundle.symbol, df)
-                    except Exception:
-                        pass
-
-                # Get strategy consensus
-                vote = self.strategy_selector.generate_combined_signal(
-                    symbol=bundle.symbol,
-                    df=self.aggregator.price_feed.get_historical(
-                        bundle.symbol, period="1y", interval="1d"
-                    ),
-                    market_regime=market_regime,
-                    ml_prediction=ml_pred,
+                df = self.aggregator.price_feed.get_historical(
+                    bundle.symbol, period="2y", interval="1d"
                 )
-
-                if vote.consensus_action == "BUY" and vote.consensus_strength >= self.config.strategy.min_consensus_strength:
-                    strategy_filtered.append((bundle, {
-                        "vote": vote,
-                        "ml_pred": ml_pred,
-                    }))
-                    log.info(
-                        f"{bundle.symbol}: Strategy BUY "
-                        f"(strength={vote.consensus_strength:.2f}, "
-                        f"strategies={vote.active_strategies})"
-                    )
-
+                report = self.intelligence.gather(
+                    symbol=bundle.symbol, df=df, bundle=bundle,
+                    market_regime=market_regime,
+                )
+                intelligence_reports.append((bundle, report))
+                log.info(
+                    f"{bundle.symbol}: Intelligence gathered | "
+                    f"models={len(report.models_succeeded)}/"
+                    f"{len(report.models_succeeded)+len(report.models_failed)} | "
+                    f"agreement={report.model_agreement_score:.2f} | "
+                    f"bullish_prob={report.weighted_bullish_prob:.2f}"
+                )
             except Exception as e:
-                log.warning(f"Strategy evaluation failed for {bundle.symbol}: {e}")
+                log.warning(f"Intelligence gathering failed for {bundle.symbol}: {e}")
 
-        log.info(f"{len(strategy_filtered)} stocks passed strategy consensus filter")
+        log.info(f"Intelligence gathered for {len(intelligence_reports)} stocks")
 
-        # ── Step 11: LLM analysis (rate-limited) ─────────────────────────
+        # ── Step 11: LLM arbiter analysis (rate-limited) ─────────────────
         llm_calls = 0
         actionable_trades: list[tuple[AnalysisBundle, TradeRecommendation, dict]] = []
 
-        for bundle, extra in strategy_filtered:
+        for bundle, report in intelligence_reports:
             if llm_calls >= MAX_LLM_CALLS_PER_CYCLE:
                 log.info(f"LLM call limit ({MAX_LLM_CALLS_PER_CYCLE}) reached for this cycle")
                 break
@@ -309,8 +295,12 @@ class TradingLoop:
                 continue
 
             try:
-                recommendation = self.analyst.analyze(
+                # Build the intelligence text for the LLM
+                intelligence_text = _IA.to_llm_text(report, bundle)
+
+                recommendation = self.analyst.analyze_with_intelligence(
                     bundle=bundle,
+                    intelligence_text=intelligence_text,
                     portfolio_heat_pct=self.heat_monitor.total_heat(),
                     max_heat_pct=self.config.user.max_portfolio_heat,
                     cash_available=account.cash if account else 0,
@@ -319,6 +309,40 @@ class TradingLoop:
                     risk_tolerance=self.config.user.risk_tolerance,
                 )
                 llm_calls += 1
+
+                # Build model signals summary for DB storage
+                import json as _json
+                model_signals_json = _json.dumps({
+                    "ensemble": {
+                        "direction": report.ensemble_prediction.direction if report.ensemble_prediction else None,
+                        "probability": report.ensemble_prediction.probability if report.ensemble_prediction else None,
+                    },
+                    "lstm": {
+                        "direction": report.lstm_prediction.direction if report.lstm_prediction else None,
+                        "probability": report.lstm_prediction.probability if report.lstm_prediction else None,
+                    },
+                    "fuzzy": {
+                        "action": report.fuzzy_signal.action if report.fuzzy_signal else None,
+                        "score": report.fuzzy_signal.score if report.fuzzy_signal else None,
+                    },
+                    "agreement": report.model_agreement_score,
+                    "bullish_prob": report.weighted_bullish_prob,
+                    "models_succeeded": report.models_succeeded,
+                })
+
+                # Store full LLM recommendation as JSON
+                llm_response_json = _json.dumps({
+                    "action": recommendation.action,
+                    "conviction": recommendation.conviction,
+                    "max_position_pct": getattr(recommendation, "max_position_pct", None),
+                    "stop_loss_pct": getattr(recommendation, "stop_loss_pct", None),
+                    "holding_period_days": getattr(recommendation, "holding_period_days", None),
+                    "primary_thesis": recommendation.primary_thesis,
+                    "key_risks": recommendation.key_risks,
+                    "technical_summary": getattr(recommendation, "technical_summary", ""),
+                    "fundamental_summary": getattr(recommendation, "fundamental_summary", ""),
+                    "pass_reason": getattr(recommendation, "pass_reason", ""),
+                })
 
                 self.repository.log_analysis(
                     symbol=bundle.symbol,
@@ -332,13 +356,15 @@ class TradingLoop:
                     vix_level=bundle.vix.level,
                     thesis=recommendation.primary_thesis,
                     risks=recommendation.key_risks,
+                    llm_full_response=llm_response_json,
+                    model_signals=model_signals_json,
                 )
 
                 if (
                     recommendation.is_actionable
                     and recommendation.conviction >= self.config.trading.min_conviction_execute
                 ):
-                    actionable_trades.append((bundle, recommendation, extra))
+                    actionable_trades.append((bundle, recommendation, {"report": report}))
 
             except Exception as e:
                 log.warning(f"LLM analysis failed for {bundle.symbol}: {e}")

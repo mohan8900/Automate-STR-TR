@@ -9,11 +9,11 @@ from typing import Optional
 
 import pandas as pd
 
-from strategy.base import Strategy, TradeSignal
-from strategy.swing_trading import SwingTradingStrategy
-from strategy.momentum import MomentumStrategy
-from strategy.mean_reversion import MeanReversionStrategy
-from prediction.ensemble_model import PredictionResult
+from services.swing_trading.strategy.base import Strategy, TradeSignal
+from services.swing_trading.strategy.swing_trading import SwingTradingStrategy
+from services.swing_trading.strategy.momentum import MomentumStrategy
+from services.swing_trading.strategy.mean_reversion import MeanReversionStrategy
+from services.swing_trading.prediction.ensemble_model import PredictionResult
 from core.logger import get_logger
 
 log = get_logger("strategy_selector")
@@ -84,6 +84,10 @@ class StrategySelector:
             try:
                 signal = strategy.generate_signal(symbol, df, current_position)
                 signals[name] = signal
+                log.debug(
+                    f"{symbol} | {name}: {signal.action} "
+                    f"(strength={signal.strength:.2f}) — {signal.reason}"
+                )
             except Exception as e:
                 log.warning(f"Strategy {name} failed for {symbol}: {e}")
 
@@ -118,7 +122,9 @@ class StrategySelector:
         if total_votes == 0:
             return self._neutral_vote(symbol, active, ml_prediction)
 
-        if buy_votes >= 2 or (buy_votes >= 1 and buy_strength > 0.7):
+        # In BEAR regime, accept a single strong signal (0.60+) since opportunities are rarer
+        single_vote_threshold = 0.60 if market_regime == "BEAR" else 0.70
+        if buy_votes >= 2 or (buy_votes >= 1 and buy_strength > single_vote_threshold):
             consensus_action = "BUY"
             consensus_strength = min(1.0, (buy_strength / max(1, buy_votes)) + ml_boost)
         elif sell_votes >= 2:

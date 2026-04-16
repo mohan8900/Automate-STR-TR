@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from strategy.base import Strategy, TradeSignal
+from services.swing_trading.strategy.base import Strategy, TradeSignal
 from core.logger import get_logger
 
 log = get_logger("mean_reversion_strategy")
@@ -132,7 +132,7 @@ class MeanReversionStrategy(Strategy):
         return self._pass(symbol, f"Mean reversion score {score:.2f} insufficient")
 
     def is_suitable_regime(self, regime: str) -> bool:
-        return regime in ("SIDEWAYS", "BULL")  # Mean reversion works in range-bound markets
+        return regime in ("SIDEWAYS", "BULL", "BEAR")  # Oversold bounces are strong in bear markets too
 
     def _pass(self, symbol: str, reason: str) -> TradeSignal:
         return TradeSignal(

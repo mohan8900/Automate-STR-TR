@@ -5,7 +5,26 @@
       "Bash(xargs wc *)",
       "Bash(wc -l \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/prediction/\"*.py \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/backtesting/\"*.py \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/portfolio/\"*.py \"C:/Users/mohan.raj086/new repos/firms/ai-stock-trader/strategy/\"*.py)",
       "Bash(py --list)",
-      "Bash(py -3.11 -m venv venv)"
+      "Bash(py -3.11 -m venv venv)",
+      "WebSearch",
+      "Bash(pip install *)",
+      "Bash(python -c \"from prediction.lstm_model import LSTMPredictor; print\\('LSTM OK'\\)\")",
+      "Bash(python -c \"from prediction.fuzzy_logic import FuzzyTradingSystem; print\\('Fuzzy OK'\\)\")",
+      "Bash(python -c \"from prediction.intelligence_aggregator import IntelligenceAggregator; print\\('Intelligence OK'\\)\")",
+      "Bash(python -c ' *)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(python -m py_compile services/day_trading/risk/__init__.py)",
+      "Bash(python -m py_compile services/day_trading/risk/intraday_risk.py)",
+      "Bash(python -m py_compile services/day_trading/loop.py)",
+      "Bash(python -m py_compile main.py)",
+      "Bash(python -m py_compile database/manager.py)",
+      "Bash(python main.py --help)",
+      "Bash(cp -r strategy services/swing_trading/strategy)",
+      "Bash(cp -r prediction services/swing_trading/prediction)",
+      "Bash(cp -r backtesting services/swing_trading/backtesting)",
+      "Bash(cp -r portfolio services/swing_trading/portfolio)",
+      "Bash(cp scheduler/trading_loop.py services/swing_trading/trading_loop.py)"
     ]
   }
 }

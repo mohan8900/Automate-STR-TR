@@ -8,8 +8,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 
-st.set_page_config(page_title="History", page_icon="📜", layout="wide")
-st.title("Trade History & Analytics")
+st.set_page_config(page_title="History", page_icon="", layout="wide")
+from dashboard.theme import apply_theme, apply_plotly_theme, COLORS, section_header
+apply_theme()
+section_header("Trade History & Analytics")
 
 @st.cache_resource
 def get_deps():

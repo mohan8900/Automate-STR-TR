@@ -8,8 +8,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 
-st.set_page_config(page_title="Signals", page_icon="📡", layout="wide")
-st.title("Live Market Signals")
+st.set_page_config(page_title="Signals", page_icon="", layout="wide")
+from dashboard.theme import apply_theme, apply_plotly_theme, COLORS, section_header
+apply_theme()
+section_header("Live Market Signals")
 
 @st.cache_resource
 def get_deps():
@@ -169,6 +171,7 @@ if st.button("Load Chart") or symbol_input:
                 height=700, showlegend=True,
                 xaxis_rangeslider_visible=False,
             )
+            apply_plotly_theme(fig)
             st.plotly_chart(fig, use_container_width=True)
 
             # Technical signals summary

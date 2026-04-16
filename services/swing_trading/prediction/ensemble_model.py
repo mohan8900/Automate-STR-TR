@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from core.logger import get_logger
-from prediction.feature_engineer import FeatureEngineer
+from services.swing_trading.prediction.feature_engineer import FeatureEngineer
 
 log = get_logger("ensemble_model")
 
@@ -293,9 +293,9 @@ class EnsemblePredictor:
         y_pred = (avg_proba > 0.5).astype(int)
 
         accuracy = accuracy_score(y_val, y_pred)
-        precision = precision_score(y_val, y_pred, zero_division=0.5)
-        recall = recall_score(y_val, y_pred, zero_division=0.5)
-        f1 = f1_score(y_val, y_pred, zero_division=0.5)
+        precision = precision_score(y_val, y_pred, zero_division=0.0)
+        recall = recall_score(y_val, y_pred, zero_division=0.0)
+        f1 = f1_score(y_val, y_pred, zero_division=0.0)
 
         # Simulated P&L on validation period
         val_returns = full_features["target_return"].iloc[split_idx:].values

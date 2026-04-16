@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trades — AI Stock Trader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{dark:{800:'#1a1a2e',900:'#0f0f1a',700:'#252545'}}}}}</script>
+    <style>
+        body { background: #0f0f1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; }
+        .card { background: #1a1a2e; border: 1px solid #252545; border-radius: 12px; padding: 20px; }
+        .nav-link { padding: 10px 20px; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: #252545; color: #2979ff; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .green { color: #00c853; } .red { color: #ff1744; } .blue { color: #2979ff; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; color: #888; font-size: 0.7rem; text-transform: uppercase; border-bottom: 1px solid #252545; }
+        td { padding: 10px 12px; border-bottom: 1px solid #151525; font-size: 0.85rem; }
+        tr:hover { background: #252545; }
+        .btn-approve { background: #1b5e20; color: #a5d6a7; padding: 6px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.8rem; }
+        .btn-approve:hover { background: #2e7d32; }
+        .btn-reject { background: #b71c1c; color: #ef9a9a; padding: 6px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.8rem; }
+        .btn-reject:hover { background: #c62828; }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    </style>
+</head>
+<body class="dark">
+
+<nav class="fixed top-0 left-0 right-0 z-50 bg-dark-900 border-b border-dark-700 px-6 py-3 flex items-center justify-between">
+    <span class="text-xl font-bold blue">AI Stock Trader</span>
+    <div class="flex gap-2">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/watchlist" class="nav-link">Watchlist</a>
+        <a href="/trades" class="nav-link active">Trades</a>
+        <a href="/health" class="nav-link">System Health</a>
+    </div>
+    <span id="clock" class="text-sm text-gray-500"></span>
+</nav>
+
+<main class="pt-20 px-6 pb-10 max-w-7xl mx-auto">
+
+    <!-- Pending Approvals -->
+    <div class="card mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">Pending Approvals</h2>
+            <span id="pending-badge" class="badge bg-gray-800 text-gray-400">Loading...</span>
+        </div>
+        <div id="pending-container"></div>
+    </div>
+
+    <!-- Open Positions -->
+    <div class="card mb-6">
+        <h2 class="text-xl font-bold mb-4">Open Positions</h2>
+        <div class="overflow-x-auto">
+            <table>
+                <thead>
+                    <tr><th>Symbol</th><th>Action</th><th>Shares</th><th>Entry</th><th>Stop Loss</th><th>Conviction</th><th>Thesis</th><th>Opened</th></tr>
+                </thead>
+                <tbody id="open-positions"></tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<script>
+const C = "{{ currency }}";
+
+setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'}) + ' IST';
+}, 1000);
+
+async function loadPending() {
+    const res = await fetch('/api/pending');
+    const data = await res.json();
+    const badge = document.getElementById('pending-badge');
+    const container = document.getElementById('pending-container');
+
+    if (!data.length) {
+        badge.textContent = '0 pending';
+        badge.className = 'badge bg-green-900 text-green-400';
+        container.innerHTML = '<p class="text-gray-500">No trades awaiting your approval. The system will generate recommendations during market hours.</p>';
+        return;
+    }
+
+    badge.textContent = data.length + ' awaiting';
+    badge.className = 'badge bg-yellow-900 text-yellow-400 pulse';
+
+    container.innerHTML = data.map(p => `
+        <div class="border border-dark-700 rounded-lg p-4 mb-3">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="badge ${p.action==='BUY'?'bg-green-900 text-green-400':'bg-red-900 text-red-400'} text-sm">${p.action}</span>
+                        <span class="text-lg font-bold">${p.symbol}</span>
+                        <span class="text-gray-400">Conviction: <strong>${p.conviction}/10</strong></span>
+                        <span class="text-gray-400">${C}${Number(p.position_value).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-4 text-sm mb-2">
+                        <div><span class="text-gray-500">Entry:</span> ${C}${Number(p.entry_price).toFixed(2)}</div>
+                        <div><span class="text-gray-500">Stop:</span> <span class="red">${C}${Number(p.stop_loss).toFixed(2)}</span></div>
+                        <div><span class="text-gray-500">Score:</span> ${Number(p.composite_score).toFixed(0)}/100</div>
+                        <div><span class="text-gray-500">Created:</span> ${p.created_at}</div>
+                    </div>
+                    <p class="text-sm text-gray-400">${p.thesis || 'No thesis available'}</p>
+                </div>
+                <div class="flex gap-2 ml-4">
+                    <button onclick="approve(${p.id})" class="btn-approve">Approve</button>
+                    <button onclick="reject(${p.id})" class="btn-reject">Reject</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function approve(id) {
+    await fetch('/api/approve/' + id, {method:'POST'});
+    loadPending();
+}
+
+async function reject(id) {
+    await fetch('/api/reject/' + id, {method:'POST'});
+    loadPending();
+}
+
+async function loadPositions() {
+    const res = await fetch('/api/positions');
+    const data = await res.json();
+    const tbody = document.getElementById('open-positions');
+    if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-gray-500 text-center py-6">No open positions</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.map(p => `
+        <tr>
+            <td class="font-semibold">${p.symbol}</td>
+            <td><span class="badge ${p.action==='BUY'?'bg-green-900 text-green-400':'bg-red-900 text-red-400'}">${p.action}</span></td>
+            <td>${p.shares}</td>
+            <td>${C}${Number(p.entry_price).toFixed(2)}</td>
+            <td class="red">${C}${Number(p.stop_loss).toFixed(2)}</td>
+            <td>${p.conviction}/10</td>
+            <td class="text-gray-400 text-xs max-w-xs truncate">${p.thesis||'—'}</td>
+            <td class="text-gray-500 text-xs">${p.opened_at}</td>
+        </tr>
+    `).join('');
+}
+
+loadPending(); loadPositions();
+setInterval(() => { loadPending(); loadPositions(); }, 15000);
+</script>
+</body>
+</html>

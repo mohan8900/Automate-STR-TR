@@ -150,24 +150,37 @@ class TradeRepository:
         risks: list[str],
         approved: bool = False,
         trade_id: Optional[int] = None,
+        llm_full_response: Optional[str] = None,
+        model_signals: Optional[str] = None,
     ) -> int:
         sql = """
         INSERT INTO analysis_logs (
             symbol, action_recommended, conviction, composite_score,
             technical_score, fundamental_score, sentiment_score,
             market_regime, vix_level, llm_thesis, llm_risks,
+            llm_full_response, model_signals,
             execution_approved, trade_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         with self.db.get_connection() as conn:
             cur = conn.execute(sql, (
                 symbol, action, conviction, composite_score,
                 technical_score, fundamental_score, sentiment_score,
                 market_regime, vix_level, thesis, json.dumps(risks),
+                llm_full_response, model_signals,
                 1 if approved else 0, trade_id,
             ))
             conn.commit()
             return cur.lastrowid
+
+    def get_analysis_logs(self, limit: int = 50) -> list[dict]:
+        """Get recent LLM analysis logs."""
+        with self.db.get_connection() as conn:
+            rows = conn.execute("""
+                SELECT * FROM analysis_logs
+                ORDER BY timestamp DESC LIMIT ?
+            """, (limit,)).fetchall()
+            return [dict(r) for r in rows]
 
     # ── Approval Queue ────────────────────────────────────────────────────
 

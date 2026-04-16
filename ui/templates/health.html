@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Health — AI Stock Trader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{dark:{800:'#1a1a2e',900:'#0f0f1a',700:'#252545'}}}}}</script>
+    <style>
+        body { background: #0f0f1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; }
+        .card { background: #1a1a2e; border: 1px solid #252545; border-radius: 12px; padding: 20px; }
+        .nav-link { padding: 10px 20px; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: #252545; color: #2979ff; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .green { color: #00c853; } .red { color: #ff1744; } .yellow { color: #ffc107; } .blue { color: #2979ff; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-ok { background: #00c853; } .status-warn { background: #ffc107; } .status-error { background: #ff1744; }
+        .progress-bar { height: 8px; background: #252545; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .tier-badge { padding: 6px 16px; border-radius: 8px; font-weight: 600; text-align: center; }
+        .config-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #252545; }
+        .config-key { color: #888; } .config-val { font-weight: 500; }
+    </style>
+</head>
+<body class="dark">
+
+<nav class="fixed top-0 left-0 right-0 z-50 bg-dark-900 border-b border-dark-700 px-6 py-3 flex items-center justify-between">
+    <span class="text-xl font-bold blue">AI Stock Trader</span>
+    <div class="flex gap-2">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/watchlist" class="nav-link">Watchlist</a>
+        <a href="/trades" class="nav-link">Trades</a>
+        <a href="/health" class="nav-link active">System Health</a>
+    </div>
+    <span id="clock" class="text-sm text-gray-500"></span>
+</nav>
+
+<main class="pt-20 px-6 pb-10 max-w-7xl mx-auto">
+
+    <!-- Kill Switch -->
+    <div class="card mb-6">
+        <h2 class="text-xl font-bold mb-4">Kill Switch</h2>
+        <div class="grid grid-cols-3 gap-6">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="status-dot status-ok" id="ks-dot"></span>
+                    <span class="text-lg font-semibold" id="ks-status">INACTIVE — System Normal</span>
+                </div>
+                <p class="text-sm text-gray-500">Emergency shutdown cancels all orders, closes all positions, halts trading.</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-400 mb-1">Anomaly Thresholds</p>
+                <div class="text-sm space-y-1">
+                    <div>Max orders/minute: <strong>5</strong></div>
+                    <div>Max daily loss: <strong>5%</strong></div>
+                    <div>Max same-symbol/5min: <strong>2</strong></div>
+                </div>
+            </div>
+            <div class="text-right">
+                <button onclick="alert('Connect to live trading loop to enable kill switch')" class="px-6 py-3 bg-red-900 text-red-300 rounded-lg font-bold hover:bg-red-800 text-sm">
+                    EMERGENCY STOP
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drawdown Tracker -->
+    <div class="card mb-6">
+        <h2 class="text-xl font-bold mb-4">Drawdown Tracker</h2>
+        <div class="grid grid-cols-5 gap-4 mb-4">
+            <div class="text-center">
+                <div class="text-2xl font-bold" id="dd-hwm">—</div>
+                <div class="text-xs text-gray-500 uppercase">High Water Mark</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold" id="dd-current">—</div>
+                <div class="text-xs text-gray-500 uppercase">Current Value</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold red" id="dd-pct">—</div>
+                <div class="text-xs text-gray-500 uppercase">Drawdown</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold blue" id="dd-mult">—</div>
+                <div class="text-xs text-gray-500 uppercase">Size Multiplier</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold" id="dd-tier-label">—</div>
+                <div class="text-xs text-gray-500 uppercase">Tier</div>
+            </div>
+        </div>
+
+        <!-- Drawdown progress -->
+        <div class="progress-bar mb-3">
+            <div class="progress-fill" id="dd-progress" style="width:0%;background:#00c853"></div>
+        </div>
+
+        <!-- Tier indicators -->
+        <div class="grid grid-cols-4 gap-2">
+            <div class="tier-badge" id="tier-normal" style="background:#1b5e20;color:#a5d6a7">0-5% Normal (1.0x)</div>
+            <div class="tier-badge" id="tier-caution" style="background:#252545;color:#666">5-10% Caution (0.5x)</div>
+            <div class="tier-badge" id="tier-severe" style="background:#252545;color:#666">10-15% Severe (0.25x)</div>
+            <div class="tier-badge" id="tier-halt" style="background:#252545;color:#666">15%+ HALT (0.0x)</div>
+        </div>
+    </div>
+
+    <!-- Circuit Breaker + Market Status -->
+    <div class="grid grid-cols-2 gap-6 mb-6">
+        <div class="card">
+            <h2 class="text-xl font-bold mb-4">Circuit Breaker</h2>
+            <div class="space-y-3" id="cb-checks">
+                <div class="flex justify-between items-center">
+                    <span>Daily P&L</span>
+                    <span class="flex items-center gap-2"><span class="status-dot status-ok"></span> <span id="cb-pnl">OK</span></span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>Open Positions</span>
+                    <span class="flex items-center gap-2"><span class="status-dot status-ok"></span> <span id="cb-pos">—</span></span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>Portfolio Heat</span>
+                    <span class="flex items-center gap-2"><span class="status-dot status-ok"></span> <span id="cb-heat">—</span></span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>VIX Level</span>
+                    <span class="flex items-center gap-2"><span class="status-dot status-ok"></span> <span id="cb-vix">—</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="text-xl font-bold mb-4">Market Status</h2>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span>Exchange</span>
+                    <span class="font-bold blue">{{ exchange }} (NSE/BSE)</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>Market</span>
+                    <span id="mkt-status" class="font-bold">Loading...</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>Mode</span>
+                    <span class="font-bold {% if paper_trading %}green{% else %}red{% endif %}">{% if paper_trading %}PAPER TRADING{% else %}LIVE TRADING{% endif %}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span>Approval Required</span>
+                    <span class="font-bold green">Yes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration -->
+    <div class="card">
+        <h2 class="text-xl font-bold mb-4">Active Configuration</h2>
+        <div class="grid grid-cols-2 gap-8" id="config-grid"></div>
+    </div>
+
+</main>
+
+<script>
+const C = "{{ currency }}";
+
+setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'}) + ' IST';
+}, 1000);
+
+async function loadDrawdown() {
+    const res = await fetch('/api/drawdown');
+    const d = await res.json();
+
+    document.getElementById('dd-hwm').textContent = C + Number(d.high_water_mark).toLocaleString('en-IN', {maximumFractionDigits:0});
+    document.getElementById('dd-current').textContent = C + Number(d.current_value).toLocaleString('en-IN', {maximumFractionDigits:0});
+    document.getElementById('dd-pct').textContent = (d.drawdown_pct * 100).toFixed(1) + '%';
+    document.getElementById('dd-mult').textContent = (d.multiplier * 100).toFixed(0) + '%';
+
+    const tiers = {normal: 'tier-normal', caution: 'tier-caution', severe: 'tier-severe', halt: 'tier-halt'};
+    const tierColors = {normal: '#1b5e20', caution: '#e65100', severe: '#bf360c', halt: '#b71c1c'};
+    const tierText = {normal: '#a5d6a7', caution: '#ffcc80', severe: '#ffab91', halt: '#ef9a9a'};
+
+    Object.keys(tiers).forEach(t => {
+        const el = document.getElementById(tiers[t]);
+        if (t === d.tier_label) {
+            el.style.background = tierColors[t];
+            el.style.color = tierText[t];
+        } else {
+            el.style.background = '#252545';
+            el.style.color = '#666';
+        }
+    });
+
+    document.getElementById('dd-tier-label').textContent = d.tier_label.toUpperCase();
+
+    const pct = Math.min(d.drawdown_pct / 0.15 * 100, 100);
+    const bar = document.getElementById('dd-progress');
+    bar.style.width = pct + '%';
+    bar.style.background = d.drawdown_pct < 0.05 ? '#00c853' : d.drawdown_pct < 0.10 ? '#ffc107' : d.drawdown_pct < 0.15 ? '#ff9800' : '#ff1744';
+}
+
+async function loadCircuitBreaker() {
+    const res = await fetch('/api/portfolio');
+    const d = await res.json();
+
+    document.getElementById('cb-pnl').textContent = (d.daily_pnl_pct * 100).toFixed(2) + '%';
+    document.getElementById('cb-pos').textContent = d.open_positions;
+    document.getElementById('cb-heat').textContent = ((d.portfolio_heat || 0) * 100).toFixed(1) + '%';
+    document.getElementById('cb-vix').textContent = d.vix_level ? d.vix_level.toFixed(1) : '—';
+}
+
+async function loadMarket() {
+    const res = await fetch('/api/market-status');
+    const d = await res.json();
+    const el = document.getElementById('mkt-status');
+    if (d.is_open) {
+        el.textContent = 'OPEN';
+        el.className = 'font-bold green';
+    } else {
+        el.textContent = 'CLOSED (' + d.next_open + ')';
+        el.className = 'font-bold red';
+    }
+}
+
+async function loadConfig() {
+    const res = await fetch('/api/config');
+    const d = await res.json();
+    const grid = document.getElementById('config-grid');
+    const left = [
+        ['Exchange', d.exchange], ['Investment', C + Number(d.investment).toLocaleString('en-IN')],
+        ['Trading Budget', C + Number(d.budget).toLocaleString('en-IN')], ['Risk Tolerance', d.risk_tolerance],
+        ['Paper Trading', d.paper_trading ? 'Yes' : 'No'], ['Approval Required', d.approval_required ? 'Yes' : 'No'],
+    ];
+    const right = [
+        ['Max Position %', (d.max_position_pct * 100).toFixed(0) + '%'],
+        ['Max Daily Loss', (d.max_daily_loss * 100).toFixed(0) + '%'],
+        ['Max Heat', (d.max_heat * 100).toFixed(0) + '%'],
+        ['Scan Interval', d.scan_interval + ' min'],
+        ['Max Positions', d.max_positions],
+        ['ML Enabled', d.ml_enabled ? 'Yes' : 'No'],
+        ['LLM Model', d.llm_model],
+    ];
+
+    grid.innerHTML = `
+        <div>${left.map(([k,v]) => `<div class="config-row"><span class="config-key">${k}</span><span class="config-val">${v}</span></div>`).join('')}</div>
+        <div>${right.map(([k,v]) => `<div class="config-row"><span class="config-key">${k}</span><span class="config-val">${v}</span></div>`).join('')}</div>
+    `;
+}
+
+loadDrawdown(); loadCircuitBreaker(); loadMarket(); loadConfig();
+setInterval(() => { loadDrawdown(); loadCircuitBreaker(); loadMarket(); }, 10000);
+</script>
+</body>
+</html>

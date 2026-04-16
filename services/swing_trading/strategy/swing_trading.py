@@ -12,7 +12,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from strategy.base import Strategy, TradeSignal
+from services.swing_trading.strategy.base import Strategy, TradeSignal
 from core.logger import get_logger
 
 log = get_logger("swing_strategy")
@@ -130,7 +130,7 @@ class SwingTradingStrategy(Strategy):
                 buy_score += 0.05
                 reasons.append("Short-term trend bullish")
         else:
-            buy_score -= 0.10  # Penalty for downtrend
+            buy_score -= 0.05  # Mild penalty for downtrend (reduced for BEAR regime opportunities)
 
         # 4. Volume confirmation
         if rel_vol >= self.min_volume_ratio:
@@ -210,7 +210,7 @@ class SwingTradingStrategy(Strategy):
         )
 
     def is_suitable_regime(self, regime: str) -> bool:
-        return regime in ("BULL", "SIDEWAYS")
+        return regime in ("BULL", "SIDEWAYS", "BEAR")
 
     def _pass_signal(self, symbol: str, reason: str) -> TradeSignal:
         return TradeSignal(

@@ -9,12 +9,12 @@ from typing import Optional
 
 import pandas as pd
 
-from backtesting.engine import BacktestEngine, BacktestResult
+from services.swing_trading.backtesting.engine import BacktestEngine, BacktestResult
 from config.settings import TradingSystemConfig
 from config.watchlists import BENCHMARK
 from data.price_feed import PriceFeed
-from prediction.ensemble_model import EnsemblePredictor
-from prediction.feature_engineer import FeatureEngineer
+from services.swing_trading.prediction.ensemble_model import EnsemblePredictor
+from services.swing_trading.prediction.feature_engineer import FeatureEngineer
 from core.logger import get_logger
 
 log = get_logger("backtest_runner")

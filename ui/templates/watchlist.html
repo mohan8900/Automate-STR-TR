@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchlist — AI Stock Trader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{dark:{800:'#1a1a2e',900:'#0f0f1a',700:'#252545'},accent:{green:'#00c853',red:'#ff1744',yellow:'#ffc107',blue:'#2979ff'}}}}}</script>
+    <style>
+        body { background: #0f0f1a; color: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; }
+        .card { background: #1a1a2e; border: 1px solid #252545; border-radius: 12px; padding: 20px; }
+        .nav-link { padding: 10px 20px; border-radius: 8px; transition: all 0.2s; }
+        .nav-link:hover, .nav-link.active { background: #252545; color: #2979ff; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .green { color: #00c853; } .red { color: #ff1744; } .yellow { color: #ffc107; } .blue { color: #2979ff; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px 12px; color: #888; font-size: 0.7rem; text-transform: uppercase; border-bottom: 1px solid #252545; cursor: pointer; }
+        th:hover { color: #2979ff; }
+        td { padding: 8px 12px; border-bottom: 1px solid #151525; font-size: 0.85rem; }
+        tr:hover { background: #252545; }
+        .score-bar { height: 6px; border-radius: 3px; background: #252545; }
+        .score-fill { height: 100%; border-radius: 3px; }
+        .loading { display: flex; align-items: center; justify-content: center; padding: 60px; color: #666; }
+        .spinner { width: 24px; height: 24px; border: 3px solid #252545; border-top-color: #2979ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="dark">
+
+<nav class="fixed top-0 left-0 right-0 z-50 bg-dark-900 border-b border-dark-700 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <span class="text-xl font-bold blue">AI Stock Trader</span>
+    </div>
+    <div class="flex gap-2">
+        <a href="/" class="nav-link">Dashboard</a>
+        <a href="/watchlist" class="nav-link active">Watchlist</a>
+        <a href="/trades" class="nav-link">Trades</a>
+        <a href="/health" class="nav-link">System Health</a>
+    </div>
+    <span id="clock" class="text-sm text-gray-500"></span>
+</nav>
+
+<main class="pt-20 px-6 pb-10 max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold">Live Watchlist</h1>
+        <div class="flex gap-3 items-center">
+            <select id="filter" onchange="filterTable()" class="bg-dark-800 border border-dark-700 rounded-lg px-3 py-2 text-sm">
+                <option value="all">All Stocks</option>
+                <option value="oversold">Oversold (RSI &lt; 30)</option>
+                <option value="overbought">Overbought (RSI &gt; 70)</option>
+                <option value="bullish">Bullish MACD</option>
+                <option value="golden">Golden Cross</option>
+                <option value="highscore">High Score (&gt;65)</option>
+            </select>
+            <button onclick="loadWatchlist()" class="px-4 py-2 bg-blue-800 text-blue-300 rounded-lg text-sm hover:bg-blue-700">
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-5 gap-4 mb-6">
+        <div class="card text-center">
+            <div class="text-2xl font-bold blue" id="total-stocks">—</div>
+            <div class="text-xs text-gray-500 uppercase">Stocks</div>
+        </div>
+        <div class="card text-center">
+            <div class="text-2xl font-bold green" id="gainers">—</div>
+            <div class="text-xs text-gray-500 uppercase">Gainers</div>
+        </div>
+        <div class="card text-center">
+            <div class="text-2xl font-bold red" id="losers">—</div>
+            <div class="text-xs text-gray-500 uppercase">Losers</div>
+        </div>
+        <div class="card text-center">
+            <div class="text-2xl font-bold" id="avg-rsi">—</div>
+            <div class="text-xs text-gray-500 uppercase">Avg RSI</div>
+        </div>
+        <div class="card text-center">
+            <div class="text-2xl font-bold green" id="bullish-count">—</div>
+            <div class="text-xs text-gray-500 uppercase">Bullish MACD</div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            Scanning watchlist... this takes 30-60 seconds
+        </div>
+        <div id="table-container" style="display:none;" class="overflow-x-auto">
+            <table>
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)">Symbol</th>
+                        <th onclick="sortTable(1)">Price</th>
+                        <th onclick="sortTable(2)">Change</th>
+                        <th onclick="sortTable(3)">RSI</th>
+                        <th onclick="sortTable(4)">Signal</th>
+                        <th onclick="sortTable(5)">MACD</th>
+                        <th onclick="sortTable(6)">Score</th>
+                        <th onclick="sortTable(7)">Volume</th>
+                        <th onclick="sortTable(8)">BB Pos</th>
+                        <th>Trend</th>
+                        <th>OBV</th>
+                    </tr>
+                </thead>
+                <tbody id="watchlist-body"></tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<script>
+const CURRENCY = "{{ currency }}";
+let allData = [];
+
+setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' IST';
+}, 1000);
+
+function rsiColor(rsi) {
+    if (rsi < 30) return 'green';
+    if (rsi > 70) return 'red';
+    return '';
+}
+
+function scoreBar(score) {
+    const color = score >= 65 ? '#00c853' : score >= 45 ? '#ffc107' : '#ff1744';
+    return `<div class="flex items-center gap-2">
+        <div class="score-bar w-16"><div class="score-fill" style="width:${score}%;background:${color}"></div></div>
+        <span style="color:${color}">${score.toFixed(0)}</span>
+    </div>`;
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById('watchlist-body');
+    tbody.innerHTML = data.map(s => `
+        <tr>
+            <td class="font-semibold">${s.symbol}</td>
+            <td>${CURRENCY}${s.price.toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+            <td class="${s.change_pct>=0?'green':'red'}">${s.change_pct>=0?'+':''}${s.change_pct.toFixed(2)}%</td>
+            <td class="${rsiColor(s.rsi)}" style="font-weight:${s.rsi<30||s.rsi>70?'bold':'normal'}">${s.rsi.toFixed(0)}</td>
+            <td><span class="badge ${s.rsi_signal==='oversold'?'bg-green-900 text-green-400':s.rsi_signal==='overbought'?'bg-red-900 text-red-400':'bg-gray-800 text-gray-400'}">${s.rsi_signal}</span></td>
+            <td><span class="badge ${s.macd_cross==='bullish'?'bg-green-900 text-green-400':s.macd_cross==='bearish'?'bg-red-900 text-red-400':'bg-gray-800 text-gray-400'}">${s.macd_cross}</span></td>
+            <td>${scoreBar(s.tech_score)}</td>
+            <td class="${s.rel_volume>1.5?'yellow':''}">${s.rel_volume.toFixed(1)}x</td>
+            <td>${s.bb_position.toFixed(2)}</td>
+            <td>${s.golden_cross?'<span class="green font-bold">Golden</span>':'<span class="text-gray-600">—</span>'}</td>
+            <td class="${s.obv_trend==='up'?'green':s.obv_trend==='down'?'red':''}">${s.obv_trend}</td>
+        </tr>
+    `).join('');
+}
+
+function filterTable() {
+    const filter = document.getElementById('filter').value;
+    let filtered = [...allData];
+    if (filter === 'oversold') filtered = filtered.filter(s => s.rsi < 30);
+    else if (filter === 'overbought') filtered = filtered.filter(s => s.rsi > 70);
+    else if (filter === 'bullish') filtered = filtered.filter(s => s.macd_cross === 'bullish');
+    else if (filter === 'golden') filtered = filtered.filter(s => s.golden_cross);
+    else if (filter === 'highscore') filtered = filtered.filter(s => s.tech_score >= 65);
+    renderTable(filtered);
+}
+
+let sortDir = 1;
+function sortTable(col) {
+    const keys = ['symbol','price','change_pct','rsi','rsi_signal','macd_cross','tech_score','rel_volume','bb_position'];
+    const key = keys[col];
+    if (!key) return;
+    sortDir *= -1;
+    allData.sort((a, b) => {
+        if (typeof a[key] === 'string') return sortDir * a[key].localeCompare(b[key]);
+        return sortDir * (a[key] - b[key]);
+    });
+    filterTable();
+}
+
+async function loadWatchlist() {
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('table-container').style.display = 'none';
+    try {
+        const res = await fetch('/api/watchlist');
+        allData = await res.json();
+        document.getElementById('total-stocks').textContent = allData.length;
+        document.getElementById('gainers').textContent = allData.filter(s => s.change_pct > 0).length;
+        document.getElementById('losers').textContent = allData.filter(s => s.change_pct < 0).length;
+        document.getElementById('avg-rsi').textContent = (allData.reduce((a,s) => a + s.rsi, 0) / allData.length).toFixed(0);
+        document.getElementById('bullish-count').textContent = allData.filter(s => s.macd_cross === 'bullish').length;
+        allData.sort((a, b) => b.tech_score - a.tech_score);
+        renderTable(allData);
+    } catch(e) {
+        console.error(e);
+    }
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('table-container').style.display = 'block';
+}
+
+loadWatchlist();
+</script>
+</body>
+</html>

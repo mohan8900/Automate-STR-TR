@@ -10,8 +10,10 @@ import json
 import streamlit as st
 from datetime import datetime
 
-st.set_page_config(page_title="Trade Approval", page_icon="✅", layout="wide")
-st.title("Trade Approval Queue")
+st.set_page_config(page_title="Trade Approval", page_icon="", layout="wide")
+from dashboard.theme import apply_theme, apply_plotly_theme, COLORS, section_header
+apply_theme()
+section_header("Trade Approval Queue")
 
 @st.cache_resource
 def get_deps():

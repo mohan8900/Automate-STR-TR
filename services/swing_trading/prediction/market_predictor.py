@@ -12,7 +12,7 @@ import numpy as np
 
 from config.watchlists import BENCHMARK
 from data.price_feed import PriceFeed
-from prediction.ensemble_model import EnsemblePredictor, PredictionResult
+from services.swing_trading.prediction.ensemble_model import EnsemblePredictor, PredictionResult
 from core.logger import get_logger
 
 log = get_logger("market_predictor")
